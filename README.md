@@ -297,7 +297,7 @@ dfu-util -a 0 -s 0x08000000:leave -D build/app.bin
 - [ ] FCC/CE certification
 - [ ] CC EAL5+ certification
 - [ ] Volume manufacturing
-- [ ] **Launch Q3 2025**
+- [ ] **Launch March 2026**
 
 ---
 
