@@ -8,18 +8,9 @@
 
 #include "avp_cmd.h"
 #include "avp.h"
+#include "avp_hw.h"
 #include "os.h"
 #include <string.h>
-
-/*============================================================================
- * External Dependencies
- *============================================================================*/
-
-/* From main firmware */
-extern uint32_t timer_get_time(void);
-
-/* Hardware RNG - implemented elsewhere */
-extern void hw_random_bytes(uint8_t *buf, size_t len);
 
 /*============================================================================
  * Static Variables
@@ -29,31 +20,19 @@ static avp_ctx_t avp_ctx;
 static char avp_response[AVP_MAX_JSON_LEN];
 
 /*============================================================================
- * Platform Callbacks
- *============================================================================*/
-
-static uint32_t get_timestamp(void)
-{
-    /* Convert milliseconds to seconds */
-    return timer_get_time() / 1000;
-}
-
-static void get_random(uint8_t *buf, size_t len)
-{
-    /* Use hardware RNG */
-    hw_random_bytes(buf, len);
-}
-
-/*============================================================================
  * Public API
  *============================================================================*/
 
 void avp_cmd_init(void)
 {
+    /* Initialize AVP hardware (RNG, etc.) */
+    avp_hw_init();
+
     /* Initialize AVP context */
-    avp_init(&avp_ctx, NULL, get_timestamp, get_random);
+    avp_init(&avp_ctx, NULL, avp_hw_get_time, avp_hw_random_bytes);
 
     OS_PRINTF("# AVP Protocol v%s initialized\r\n", "0.1.0");
+    OS_PRINTF("# NexusClaw ready\r\n");
 }
 
 bool avp_cmd_is_avp(const char *data)

@@ -9,6 +9,7 @@ DIR_ROOT  ?= .
 DIR_HW     := ../hw
 DIR_SDK    := ../sdk
 DIR_USB    := ../usb
+DIR_AVP    := ../avp
 
 include  $(DIR_SDK)/sdk_stm32u535.mk
 
@@ -38,6 +39,10 @@ C_SOURCES +=  \
   $(DIR_USB)/ux_device_cdc_acm.c \
   $(DIR_USB)/ux_device_descriptors.c \
   $(DIR_USB)/usb_device.c \
+  \
+  $(DIR_AVP)/avp.c \
+  $(DIR_AVP)/avp_cmd.c \
+  $(DIR_AVP)/avp_hw.c \
 
 
 C_DEFS +=  \
@@ -47,7 +52,8 @@ C_DEFS +=  \
 C_INCLUDES +=  \
 -I$(DIR_ROOT) \
 -I$(DIR_USB) \
--I$(DIR_HW)
+-I$(DIR_HW) \
+-I$(DIR_AVP)
 
 # default action: build all
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin

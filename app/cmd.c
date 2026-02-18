@@ -137,8 +137,10 @@ static bool _cmd_help(const cmd_t *cmd)
     const cmd_t *table = _CMD_TABLE;
     int i;
 
-    OS_PRINTF("Tropicsquare USB/SPI interface" NL);
-    OS_PRINTF("Type HEX characters to make SPI transfer (i.e. \"1122aabb\")" NL);
+    OS_PRINTF("NexusClaw - AVP Hardware Security Key" NL);
+    OS_PRINTF("https://github.com/avp-protocol/nexusclaw" NL NL);
+    OS_PRINTF("AVP Commands: Send JSON starting with '{' (e.g., {\"op\":\"DISCOVER\"})" NL);
+    OS_PRINTF("SPI Commands: Type HEX characters (e.g., \"1122aabb\")" NL NL);
     OS_PRINTF("Supported commands:" NL);
 
     for (i = 0; ; i++)
@@ -287,7 +289,8 @@ static bool _cmd_sn(const cmd_t *cmd)
 static bool _cmd_ver(const cmd_t *cmd)
 {
     _cmd_basic_reply(cmd);
-    OS_PRINTF("FW %s, HW %s, https://github.com/tropicsquare" NL, VERSION_STRING, HW_NAME);
+    OS_PRINTF("FW %s, AVP %s, HW %s" NL, VERSION_STRING, AVP_VERSION_STRING, HW_NAME);
+    OS_PRINTF("https://github.com/avp-protocol/nexusclaw" NL);
     return (true);
 }
 

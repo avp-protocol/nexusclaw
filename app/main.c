@@ -13,6 +13,10 @@
 #include "cmd.h"
 #include "log.h"
 
+/* AVP Protocol Support */
+#include "avp.h"
+#include "avp_cmd.h"
+
 LOG_DEF("main");
 
 bool main_spi_auto = false;
@@ -200,6 +204,14 @@ static void _tty_rx_parser(char *data)
     while (*data == ' ')
         data++; // skip spaces
 
+    /* Check for AVP JSON command (starts with '{') */
+    if (avp_cmd_is_avp(data))
+    {
+        avp_cmd_process(data);
+        OS_FLUSH();
+        return;
+    }
+
     if (! _parse_hex(data))
     {
         cmd_parse(data);
@@ -294,6 +306,9 @@ int main(void)
     MAIN_LED_OFF;
     
     OS_PUTTEXT("# BUILD DATE: " __DATE__ NL);
+
+    /* Initialize AVP Protocol */
+    avp_cmd_init();
 
     OS_PUTTEXT("# RESET TYPE: ");
     switch (reset_type)
