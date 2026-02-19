@@ -9,6 +9,7 @@
 #include "avp_cmd.h"
 #include "avp.h"
 #include "avp_hw.h"
+#include "avp_tropic.h"
 #include "os.h"
 #include <string.h>
 
@@ -30,6 +31,12 @@ void avp_cmd_init(void)
 
     /* Initialize AVP context */
     avp_init(&avp_ctx, NULL, avp_hw_get_time, avp_hw_random_bytes);
+
+    /* Initialize TROPIC01 secure element */
+    avp_ret_t tropic_ret = avp_tropic_init(&avp_ctx);
+    if (tropic_ret != AVP_OK) {
+        OS_PRINTF("# WARNING: TROPIC01 init failed (%d)\r\n", tropic_ret);
+    }
 
     OS_PRINTF("# AVP Protocol v%s initialized\r\n", "0.1.0");
     OS_PRINTF("# NexusClaw ready\r\n");

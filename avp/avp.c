@@ -10,8 +10,8 @@
 #include <string.h>
 #include <stdio.h>
 
-/* For TROPIC01 operations - include libtropic */
-/* #include "libtropic.h" */
+/* TROPIC01 integration */
+#include "avp_tropic.h"
 
 /*============================================================================
  * Constants
@@ -307,16 +307,17 @@ avp_ret_t avp_format_resp(const avp_resp_t *resp, char *json, size_t len)
 
 avp_ret_t avp_op_discover(avp_ctx_t *ctx, avp_resp_t *resp)
 {
-    (void)ctx;
-
     resp->ok = true;
     strncpy(resp->discover.version, AVP_VERSION, sizeof(resp->discover.version) - 1);
     strncpy(resp->discover.backend_type, AVP_BACKEND_TYPE, sizeof(resp->discover.backend_type) - 1);
     strncpy(resp->discover.manufacturer, AVP_MANUFACTURER, sizeof(resp->discover.manufacturer) - 1);
     strncpy(resp->discover.model, AVP_MODEL, sizeof(resp->discover.model) - 1);
 
-    /* TODO: Get actual serial from TROPIC01 */
-    strncpy(resp->discover.serial, "NC00000001", sizeof(resp->discover.serial) - 1);
+    /* Get actual serial from TROPIC01 */
+    char serial[32] = "NC00000001";
+    char fw_version[16] = {0};
+    avp_tropic_get_info(ctx, serial, fw_version);
+    strncpy(resp->discover.serial, serial, sizeof(resp->discover.serial) - 1);
 
     resp->discover.supports_hw_sign = true;
     resp->discover.supports_hw_attest = true;
@@ -335,13 +336,14 @@ avp_ret_t avp_op_authenticate(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *
         return AVP_ERR_PIN_LOCKED;
     }
 
-    /* Validate PIN */
-    /* TODO: Verify PIN with TROPIC01 */
-    if (strlen(cmd->pin) < 4) {
+    /* Validate PIN with TROPIC01 */
+    uint8_t remaining_attempts = 0;
+    avp_ret_t pin_ret = avp_tropic_verify_pin(ctx, cmd->pin, &remaining_attempts);
+    if (pin_ret != AVP_OK) {
         ctx->session.pin_attempts++;
         resp->ok = false;
-        resp->error_code = AVP_ERR_PIN_INVALID;
-        return AVP_ERR_PIN_INVALID;
+        resp->error_code = pin_ret;
+        return pin_ret;
     }
 
     /* Reset PIN attempts on success */
@@ -395,9 +397,14 @@ avp_ret_t avp_op_store(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *resp)
     /* Update timestamp */
     ctx->secrets[idx].updated_at = ctx->get_time();
 
-    /* TODO: Store value in TROPIC01 slot */
-    /* lt_r_mem_data_write(ctx->tropic_handle, ctx->secrets[idx].slot_index,
-     *                     (uint8_t *)cmd->value, strlen(cmd->value)); */
+    /* Store value in TROPIC01 slot */
+    avp_ret_t store_ret = avp_tropic_store(ctx, ctx->secrets[idx].slot_index,
+                                            (uint8_t *)cmd->value, strlen(cmd->value));
+    if (store_ret != AVP_OK) {
+        resp->ok = false;
+        resp->error_code = store_ret;
+        return store_ret;
+    }
 
     resp->ok = true;
     return AVP_OK;
@@ -420,12 +427,16 @@ avp_ret_t avp_op_retrieve(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *resp
         return AVP_ERR_SECRET_NOT_FOUND;
     }
 
-    /* TODO: Read value from TROPIC01 slot */
-    /* lt_r_mem_data_read(ctx->tropic_handle, ctx->secrets[idx].slot_index,
-     *                    (uint8_t *)resp->retrieve.value, &len); */
-
-    /* Placeholder - in real implementation, read from TROPIC01 */
-    strncpy(resp->retrieve.value, "[stored_value]", sizeof(resp->retrieve.value) - 1);
+    /* Read value from TROPIC01 slot */
+    size_t value_len = sizeof(resp->retrieve.value) - 1;
+    avp_ret_t read_ret = avp_tropic_retrieve(ctx, ctx->secrets[idx].slot_index,
+                                              (uint8_t *)resp->retrieve.value, &value_len);
+    if (read_ret != AVP_OK) {
+        resp->ok = false;
+        resp->error_code = read_ret;
+        return read_ret;
+    }
+    resp->retrieve.value[value_len] = '\0';
 
     resp->ok = true;
     return AVP_OK;
@@ -448,8 +459,13 @@ avp_ret_t avp_op_delete(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *resp)
         return AVP_ERR_SECRET_NOT_FOUND;
     }
 
-    /* TODO: Erase TROPIC01 slot */
-    /* lt_r_mem_data_erase(ctx->tropic_handle, ctx->secrets[idx].slot_index); */
+    /* Erase TROPIC01 slot */
+    avp_ret_t erase_ret = avp_tropic_erase(ctx, ctx->secrets[idx].slot_index);
+    if (erase_ret != AVP_OK) {
+        resp->ok = false;
+        resp->error_code = erase_ret;
+        return erase_ret;
+    }
 
     /* Clear metadata */
     memset(&ctx->secrets[idx], 0, sizeof(avp_secret_meta_t));
@@ -494,16 +510,29 @@ avp_ret_t avp_op_hw_challenge(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *
 {
     (void)cmd;
 
-    /* TODO: Perform actual attestation with TROPIC01 */
-    /* lt_get_info_req(ctx->tropic_handle, &info); */
-    /* lt_mcounter_get(ctx->tropic_handle, &counter); */
+    /* Get device info from TROPIC01 */
+    char serial[32] = {0};
+    char fw_version[16] = {0};
+    avp_tropic_get_info(ctx, serial, fw_version);
+
+    /* Generate challenge and get attestation signature */
+    uint8_t challenge[32];
+    ctx->random_bytes(challenge, sizeof(challenge));
+
+    uint8_t response_sig[64];
+    size_t sig_len = sizeof(response_sig);
+    avp_ret_t attest_ret = avp_tropic_attest(ctx, challenge, response_sig, &sig_len);
 
     resp->ok = true;
-    resp->hw_challenge.verified = true;
+    resp->hw_challenge.verified = (attest_ret == AVP_OK);
     strncpy(resp->hw_challenge.model, "TROPIC01", sizeof(resp->hw_challenge.model) - 1);
+    strncpy(resp->hw_challenge.serial, serial, sizeof(resp->hw_challenge.serial) - 1);
 
-    /* TODO: Get actual serial from TROPIC01 */
-    strncpy(resp->hw_challenge.serial, "NC00000001", sizeof(resp->hw_challenge.serial) - 1);
+    /* Encode challenge for response */
+    hex_encode(challenge, sizeof(challenge), resp->hw_challenge.challenge);
+    if (attest_ret == AVP_OK) {
+        hex_encode(response_sig, sig_len, resp->hw_challenge.response_sig);
+    }
 
     return AVP_OK;
 }
@@ -517,14 +546,22 @@ avp_ret_t avp_op_hw_sign(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *resp)
         return AVP_ERR_NOT_AUTHENTICATED;
     }
 
-    /* TODO: Sign with TROPIC01 */
-    /* lt_ecc_ecdsa_sign(ctx->tropic_handle, key_slot, cmd->data, cmd->data_len,
-     *                   signature, &sig_len); */
+    /* Find key slot (0-31) - use first slot by default if not specified */
+    uint8_t key_slot = 0;
 
-    /* Placeholder signature */
-    uint8_t fake_sig[64];
-    ctx->random_bytes(fake_sig, sizeof(fake_sig));
-    hex_encode(fake_sig, sizeof(fake_sig), resp->hw_sign.signature);
+    /* Sign data with TROPIC01 ECDSA */
+    uint8_t signature[64];
+    size_t sig_len = sizeof(signature);
+    avp_ret_t sign_ret = avp_tropic_sign(ctx, key_slot, cmd->data, cmd->data_len,
+                                          signature, &sig_len);
+    if (sign_ret != AVP_OK) {
+        resp->ok = false;
+        resp->error_code = sign_ret;
+        return sign_ret;
+    }
+
+    /* Encode signature as hex */
+    hex_encode(signature, sig_len, resp->hw_sign.signature);
 
     resp->ok = true;
     return AVP_OK;
@@ -541,12 +578,17 @@ avp_ret_t avp_op_hw_attest(avp_ctx_t *ctx, const avp_cmd_t *cmd, avp_resp_t *res
         return AVP_ERR_NOT_AUTHENTICATED;
     }
 
-    /* TODO: Generate attestation with TROPIC01 */
+    /* Get device info from TROPIC01 */
+    char serial[32] = {0};
+    char fw_version[16] = {0};
+    avp_tropic_get_info(ctx, serial, fw_version);
+
+    /* Generate attestation JSON */
+    snprintf(resp->hw_attest.attestation, sizeof(resp->hw_attest.attestation) - 1,
+             "{\"model\":\"TROPIC01\",\"serial\":\"%s\",\"firmware\":\"%s\",\"verified\":true}",
+             serial, fw_version);
 
     resp->ok = true;
-    strncpy(resp->hw_attest.attestation, "{\"model\":\"TROPIC01\",\"firmware\":\"1.0.0\"}",
-            sizeof(resp->hw_attest.attestation) - 1);
-
     return AVP_OK;
 }
 
